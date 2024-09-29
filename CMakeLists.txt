@@ -1,24 +1,40 @@
 cmake_minimum_required(VERSION 3.10)
-project(MySQLCrowApp)
+project(invmanr_api)
 
-# Set C++ Standard
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Specify the path to Crow and MySQL Connector/C++
-set(MYSQL_CONN_DIR "${PROJECT_SOURCE_DIR}/mysql")
-set(CROW_DIR "${PROJECT_SOURCE_DIR}/Crow")  # Added this line
+# Include directories
+include_directories(
+    ${PROJECT_SOURCE_DIR}/include             # Your project's include directory
+    ${PROJECT_SOURCE_DIR}/mysql_connector_cpp/include  # Connector's include directory
+)
 
-# Include directories for Crow and MySQL
-include_directories(${CROW_DIR}/include)
-include_directories(${MYSQL_CONN_DIR}/include)
-include_directories(${MYSQL_CONN_DIR}/include/jdbc)
+# Library directories
+link_directories(
+    ${PROJECT_SOURCE_DIR}/mysql_connector_cpp/lib64
+)
 
-# Link library directories for MySQL Connector/C++
-link_directories(${MYSQL_CONN_DIR}/lib64)
+# Source files
+file(GLOB_RECURSE SOURCES
+    "${PROJECT_SOURCE_DIR}/*.cpp"
+)
 
-# Add the executable
-add_executable(MySQLCrowApp main.cpp)
+# Add executable
+add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Link libraries
-target_link_libraries(MySQLCrowApp mysqlcppconn)
+target_link_libraries(${PROJECT_NAME}
+    mysqlcppconn        # Link against libmysqlcppconn.so
+)
+
+# Set RPATH to find shared libraries at runtime
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    BUILD_RPATH "${PROJECT_SOURCE_DIR}/mysql_connector_cpp/lib64"
+)
+
+# Optionally, if you need to include the 'private' libraries
+# set_target_properties(${PROJECT_NAME} PROPERTIES
+#     BUILD_RPATH "${PROJECT_SOURCE_DIR}/mysql_connector_cpp/lib64;${PROJECT_SOURCE_DIR}/mysql_connector_cpp/lib64/private"
+# )

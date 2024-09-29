@@ -1,42 +1,43 @@
-#include "../mysql/include/jdbc/cppconn/statement.h"
-#include "../mysql/include/jdbc/mysql_connection.h"
-#include "../mysql/include/jdbc/mysql_driver.h"
 #include <iostream>
 #include <jdbc/cppconn/resultset.h>
+#include <jdbc/cppconn/statement.h>
+#include <jdbc/mysql_connection.h>
+#include <jdbc/mysql_driver.h>
+#include <memory>
 
 int main() {
   try {
-    // Create a connection to the MySQL server
-    sql::mysql::MySQL_Driver *driver;
-    sql::Connection *con;
+    // Initialize the driver
+    sql::mysql::MySQL_Driver *driver = sql::mysql::get_mysql_driver_instance();
 
-    driver = sql::mysql::get_mysql_driver_instance();
-    con = driver->connect("tcp://127.0.0.1:3306", "your_username",
-                          "your_password");
+    // Create a connection
+    std::unique_ptr<sql::Connection> conn(driver->connect(
+        "tcp://127.0.0.1:3306", // Replace with your server address if different
+        "your_username",        // Replace with your MySQL username
+        "your_password"         // Replace with your MySQL password
+        ));
 
-    // Connect to your database
-    con->setSchema("your_database_name");
+    // Set the active database schema
+    conn->setSchema("test"); // Replace with your database name if different
 
-    // Create a statement
-    sql::Statement *stmt;
-    stmt = con->createStatement();
+    // Create a new statement
+    std::unique_ptr<sql::Statement> stmt(conn->createStatement());
 
-    // Execute a query
-    sql::ResultSet *res;
-    res = stmt->executeQuery("SELECT 'Hello, World!' AS _message");
+    // Execute a simple query
+    std::unique_ptr<sql::ResultSet> res(
+        stmt->executeQuery("SELECT 'Hello, World!' AS message"));
 
     // Fetch and display the result
     while (res->next()) {
-      std::cout << "MySQL says: " << res->getString("_message") << std::endl;
+      std::cout << "Message: " << res->getString("message") << std::endl;
     }
-
-    // Clean up
-    delete res;
-    delete stmt;
-    delete con;
   } catch (sql::SQLException &e) {
-    std::cerr << "SQL Error: " << e.what() << std::endl;
+    std::cerr << "Error occurred:\n";
+    std::cerr << "Message: " << e.what() << std::endl;
+    std::cerr << "SQLState: " << e.getSQLState() << std::endl;
+    std::cerr << "Error Code: " << e.getErrorCode() << std::endl;
+    return EXIT_FAILURE;
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }
