@@ -1,8 +1,8 @@
-#include "../mysql/include/jdbc/cppconn/resultset.h"
 #include "../mysql/include/jdbc/cppconn/statement.h"
 #include "../mysql/include/jdbc/mysql_connection.h"
 #include "../mysql/include/jdbc/mysql_driver.h"
 #include <iostream>
+#include <jdbc/cppconn/resultset.h>
 
 int main() {
   try {
