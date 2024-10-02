@@ -18,10 +18,8 @@ link_directories(
 
 # Source files
 set(SOURCES
-    main.cpp  # Your main application file
-    # Add other source files that do not contain `main`
-    # For example:
-    # src/your_module.cpp
+    main.cpp
+    include/ObjectNode.cpp
 )
 
 # Add executable
