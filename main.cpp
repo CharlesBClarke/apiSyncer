@@ -15,8 +15,23 @@ const std::string DB_PASS =
     "mdeBiINwyCqdjImyhpBivbawJNDcCA"; // hard coded password
 const std::string DB_NAME = "invmangBase";
 
+// convert node to json;
+crow::json::wvalue nodeToJson(const ObjectNode &node) {
+  crow::json::wvalue jsonNode;
+  jsonNode["id"] = node.getID();
+  // Recursively add children
+  crow::json::wvalue::list children = crow::json::wvalue::list();
+  for (const auto &childPtr : node.getChildren()) {
+    children.push_back(nodeToJson(*childPtr));
+  }
+  jsonNode["children"] = std::move(children);
+
+  return jsonNode;
+}
+
 int main() {
   crow::SimpleApp app;
+
   // build the tree
   std::vector<std::unique_ptr<ObjectNode>> roots;
   std::unordered_map<int, std::unique_ptr<ObjectNode>> nodes;
@@ -45,13 +60,22 @@ int main() {
           id, obj.dump(), std::vector<std::unique_ptr<ObjectNode>>{});
     }
 
-    // now build the tree using the relationships table
     res.reset(stmt->executeQuery("SELECT * FROM relationships"));
     while (res->next()) {
       int child = res->getInt("child_id");
       int parent = res->getInt("parent_id");
-      nodes[parent]->pushChild(std::move(nodes[res->getInt(child)]));
-      nodes.erase(child);
+
+      // Ensure both parent and child exist before accessing or modifying them
+      if (nodes.find(parent) != nodes.end() &&
+          nodes.find(child) != nodes.end()) {
+        // Move the child to the parent's children vector
+        nodes[parent]->pushChild(std::move(nodes[child]));
+
+        // Erase the child node from the map after moving it
+        nodes.erase(child);
+      } else {
+        std::cerr << "Error: Parent or Child node not found!" << std::endl;
+      }
     }
     // now all nodes left in the map are roots
     for (auto &pair : nodes) {
@@ -65,6 +89,15 @@ int main() {
               << "SQLState: " << e.getSQLState() << "\n"
               << "Message: " << e.what() << std::endl;
   }
+
+  CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([&roots]() {
+    crow::json::wvalue::list json_tree;
+    for (auto &root : roots)
+      json_tree.push_back(nodeToJson(*root));
+    crow::json::wvalue result;
+    result["tree"] = std::move(json_tree);
+    return crow::response(200, result);
+  });
 
   CROW_ROUTE(app, "/api/helloWord").methods(crow::HTTPMethod::GET)([]() {
     return crow::response(200, std::string("Hello World!"));
