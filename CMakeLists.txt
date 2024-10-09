@@ -18,7 +18,9 @@ link_directories(
 
 # Source files
 set(SOURCES
-    main.cpp
+    src/main.cpp
+    src/routes.cpp
+    src/database.cpp
     include/ObjectNode.cpp
 )
 
@@ -28,6 +30,7 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 # Link libraries
 target_link_libraries(${PROJECT_NAME}
     mysqlcppconn
+    pthread
 )
 
 # Set RPATH to find shared libraries at runtime
