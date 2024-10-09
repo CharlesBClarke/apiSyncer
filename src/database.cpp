@@ -13,6 +13,7 @@ const char *DB_NAME = std::getenv("DB_NAME");
 std::pair<std::vector<std::weak_ptr<ObjectNode>>,
           std::unordered_map<int, std::shared_ptr<ObjectNode>>>
 buildTreeFromDatabase() {
+  std::cout << "Building Tree ...\n";
   std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
   std::vector<std::weak_ptr<ObjectNode>> roots;
 
@@ -30,23 +31,29 @@ buildTreeFromDatabase() {
         stmt->executeQuery("SELECT * FROM objects"));
 
     // Populate nodes map
+    std::cout << "Building nods :";
+    int number = 0;
     while (res->next()) {
+      ++number;
       int id = res->getInt("id");
       std::string name = res->getString("name");
       nodes[id] = std::make_shared<ObjectNode>(
           id, name, std::vector<std::weak_ptr<ObjectNode>>{});
     }
+    std::cout << number << "\n";
 
     // Build tree from relationships
     res.reset(stmt->executeQuery("SELECT * FROM relationships"));
     std::unordered_set<int> children;
+    std::cout << "setting relationships ...\n";
     while (res->next()) {
       int child = res->getInt("child_id");
       int parent = res->getInt("parent_id");
-
+      std::cout << "Parent ID: " << parent << ", Child ID: " << child << "\n";
       if (nodes.find(parent) != nodes.end() &&
           nodes.find(child) != nodes.end()) {
         nodes[parent]->pushChild(std::weak_ptr<ObjectNode>(nodes[child]));
+        children.insert(child);
       } else {
         std::cerr << "Error: Parent or Child node not found!" << std::endl;
       }
