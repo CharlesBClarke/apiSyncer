@@ -3,25 +3,26 @@
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
 #include <jdbc/mysql_driver.h>
-
+#include <unordered_set>
 // Database credentials
-const std::string DB_HOST = "149.28.89.172";
-const std::string DB_USER = "Charles";
-const std::string DB_PASS = "mdeBiINwyCqdjImyhpBivbawJNDcCA";
-const std::string DB_NAME = "invmangBase";
+const char *DB_HOST = std::getenv("DB_HOST");
+const char *DB_USER = std::getenv("DB_USER");
+const char *DB_PASS = std::getenv("DB_PASSWORD");
+const char *DB_NAME = std::getenv("DB_NAME");
 
-std::pair<std::vector<ObjectNode *>,
-          std::unordered_map<int, std::unique_ptr<ObjectNode>>>
+std::pair<std::vector<std::weak_ptr<ObjectNode>>,
+          std::unordered_map<int, std::shared_ptr<ObjectNode>>>
 buildTreeFromDatabase() {
-  std::unordered_map<int, std::unique_ptr<ObjectNode>> nodes;
-  std::vector<ObjectNode *> roots;
+  std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
+  std::vector<std::weak_ptr<ObjectNode>> roots;
 
   try {
     sql::mysql::MySQL_Driver *driver;
     std::unique_ptr<sql::Connection> con;
 
     driver = sql::mysql::get_mysql_driver_instance();
-    con.reset(driver->connect("tcp://" + DB_HOST + ":3306", DB_USER, DB_PASS));
+    con.reset(driver->connect("tcp://" + std::string(DB_HOST) + ":3306",
+                              std::string(DB_USER), std::string(DB_PASS)));
     con->setSchema(DB_NAME);
 
     std::unique_ptr<sql::Statement> stmt(con->createStatement());
@@ -32,21 +33,20 @@ buildTreeFromDatabase() {
     while (res->next()) {
       int id = res->getInt("id");
       std::string name = res->getString("name");
-      nodes[id] =
-          std::make_unique<ObjectNode>(id, name, std::vector<ObjectNode *>{});
+      nodes[id] = std::make_shared<ObjectNode>(
+          id, name, std::vector<std::weak_ptr<ObjectNode>>{});
     }
 
     // Build tree from relationships
     res.reset(stmt->executeQuery("SELECT * FROM relationships"));
-    std::unordered_map<int, bool> children;
+    std::unordered_set<int> children;
     while (res->next()) {
       int child = res->getInt("child_id");
       int parent = res->getInt("parent_id");
 
       if (nodes.find(parent) != nodes.end() &&
           nodes.find(child) != nodes.end()) {
-        nodes[parent]->pushChild(nodes[child].get());
-        children[child] = true;
+        nodes[parent]->pushChild(std::weak_ptr<ObjectNode>(nodes[child]));
       } else {
         std::cerr << "Error: Parent or Child node not found!" << std::endl;
       }
@@ -55,7 +55,7 @@ buildTreeFromDatabase() {
     // Identify root nodes
     for (const auto &pair : nodes) {
       if (children.find(pair.first) == children.end()) {
-        roots.push_back(pair.second.get());
+        roots.push_back(std::weak_ptr<ObjectNode>(pair.second));
       }
     }
   } catch (sql::SQLException &e) {

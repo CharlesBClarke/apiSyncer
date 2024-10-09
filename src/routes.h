@@ -5,6 +5,7 @@
 #include <crow.h>
 #include <vector>
 
-void setupRoutes(crow::SimpleApp &app, const std::vector<ObjectNode *> &roots);
+void setupRoutes(crow::SimpleApp &app,
+                 const std::vector<std::weak_ptr<ObjectNode>> &roots);
 
 #endif // ROUTES_H
