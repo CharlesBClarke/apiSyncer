@@ -1,0 +1,217 @@
+#include "ObjectNode.h"
+#include <crow.h>
+#include <jdbc/cppconn/resultset.h>
+#include <jdbc/cppconn/statement.h>
+#include <jdbc/mysql_connection.h>
+#include <jdbc/mysql_driver.h>
+#include <memory>
+#include <string>
+#include <unordered_map>
+
+// Database credentials
+const std::string DB_HOST = "149.28.89.172";
+const std::string DB_USER = "Charles";
+const std::string DB_PASS =
+    "mdeBiINwyCqdjImyhpBivbawJNDcCA"; // hard coded password
+const std::string DB_NAME = "invmangBase";
+
+// convert node to json;
+crow::json::wvalue nodeToJson(const ObjectNode &node) {
+  crow::json::wvalue jsonNode;
+  jsonNode["id"] = node.getID();
+  jsonNode["name"] = node.getName();
+  // Recursively add children
+  crow::json::wvalue::list children = crow::json::wvalue::list();
+  for (const auto &childPtr : node.getChildren()) {
+    children.push_back(nodeToJson(*childPtr));
+  }
+  jsonNode["children"] = std::move(children);
+
+  return jsonNode;
+}
+
+int main() {
+  crow::SimpleApp app;
+
+  // build the tree
+  std::unordered_map<int, std::unique_ptr<ObjectNode>> nodes;
+  std::unordered_map<int, bool> children;
+  std::vector<ObjectNode *> roots;
+
+  try {
+    sql::mysql::MySQL_Driver *driver;
+    std::unique_ptr<sql::Connection> con;
+
+    driver = sql::mysql::get_mysql_driver_instance();
+    con.reset(driver->connect("tcp://" + DB_HOST + ":3306", DB_USER, DB_PASS));
+    con->setSchema(DB_NAME);
+
+    std::unique_ptr<sql::Statement> stmt(con->createStatement());
+    std::unique_ptr<sql::ResultSet> res(
+        stmt->executeQuery("SELECT * FROM objects"));
+    crow::json::wvalue result;
+
+    // Iterate through the database results and add to hashmap
+    while (res->next()) {
+      crow::json::wvalue obj;
+      int id = res->getInt("id");
+      std::string name = res->getString("name");
+
+      // Create a unique_ptr to ObjectNode and store it in the map
+      nodes[id] =
+          std::make_unique<ObjectNode>(id, name, std::vector<ObjectNode *>{});
+    }
+
+    res.reset(stmt->executeQuery("SELECT * FROM relationships"));
+    while (res->next()) {
+      int child = res->getInt("child_id");
+      int parent = res->getInt("parent_id");
+
+      // Ensure both parent and child exist before accessing or modifying them
+      if (nodes.find(parent) != nodes.end() &&
+          nodes.find(child) != nodes.end()) {
+        // Move the child to the parent's children vector
+        nodes[parent]->pushChild(nodes[child].get());
+        children[child] = true;
+
+      } else {
+        std::cerr << "Error: Parent or Child node not found!" << std::endl;
+      }
+    }
+
+    for (const auto &pair : nodes) {
+      if (children.find(pair.first) == children.end()) {
+        roots.push_back(pair.second.get()); // Get raw pointer
+      }
+    }
+
+  } catch (sql::SQLException &e) {
+    std::cerr << "SQLException occurred:\n"
+              << "Error Code: " << e.getErrorCode() << "\n"
+              << "SQLState: " << e.getSQLState() << "\n"
+              << "Message: " << e.what() << std::endl;
+  }
+
+  // Route to add an object with optional parent_id
+  CROW_ROUTE(app, "/api/add_object")
+      .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
+        auto params = crow::json::load(req.body);
+        if (!params)
+          return crow::response(400, "Invalid JSON");
+
+        if (!params.has("serial") || !params.has("name")) {
+          return crow::response(400,
+                                "Missing required fields: 'serial' and 'name'");
+        }
+
+        std::string serial = params["serial"].s();
+        std::string name = params["name"].s();
+
+        sql::Connection *con = nullptr; // Initialize con to nullptr
+
+        try {
+          sql::mysql::MySQL_Driver *driver;
+
+          driver = sql::mysql::get_mysql_driver_instance();
+          con = driver->connect("tcp://" + DB_HOST + ":3306", DB_USER, DB_PASS);
+          con->setSchema(DB_NAME);
+
+          con->setAutoCommit(false); // Start transaction
+
+          // Insert into objects table
+          std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(
+              "INSERT INTO objects (serial, name) VALUES (?, ?)"));
+          pstmt->setString(1, serial);
+          pstmt->setString(2, name);
+          pstmt->execute();
+
+          // Get the ID of the newly inserted object
+          std::unique_ptr<sql::Statement> stmt(con->createStatement());
+          std::unique_ptr<sql::ResultSet> res(
+              stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+          int new_object_id = 0;
+          if (res->next()) {
+            new_object_id = res->getInt(1);
+          }
+
+          // Insert into relationships table, if parent_id is provided
+          if (params.has("parent_id")) {
+            int parent_id = 0; // Declare parent_id
+            auto parent_value = params["parent_id"];
+
+            if (parent_value.t() == crow::json::type::Number) {
+              double num = parent_value.d();
+
+              // Check if num is an integer
+              if (std::floor(num) == num) {
+                parent_id = static_cast<int>(num);
+              } else {
+                if (con) {
+                  con->rollback();
+                  delete con;
+                }
+                return crow::response(400, "parent_id must be an integer");
+              }
+            } else {
+              if (con) {
+                con->rollback();
+                delete con;
+              }
+              return crow::response(400, "Invalid parent_id type");
+            }
+
+            // Proceed with database operations using parent_id
+            // Optionally validate parent_id exists
+            std::unique_ptr<sql::PreparedStatement> pstmt_check(
+                con->prepareStatement(
+                    "SELECT COUNT(*) FROM objects WHERE id = ?"));
+            pstmt_check->setInt(1, parent_id);
+            std::unique_ptr<sql::ResultSet> res_check(
+                pstmt_check->executeQuery());
+            res_check->next();
+            if (res_check->getInt(1) == 0) {
+              con->rollback();
+              delete con;
+              return crow::response(400, "Invalid parent_id");
+            }
+
+            std::unique_ptr<sql::PreparedStatement> pstmt_rel(
+                con->prepareStatement("INSERT INTO relationships (parent_id, "
+                                      "child_id) VALUES (?, ?)"));
+            pstmt_rel->setInt(1, parent_id);
+            pstmt_rel->setInt(2, new_object_id);
+            pstmt_rel->execute();
+          }
+
+          con->commit(); // Commit transaction
+          delete con;
+
+          crow::json::wvalue result;
+          result["message"] = "Object added successfully.";
+          result["id"] = new_object_id;
+          return crow::response(200, result);
+        } catch (sql::SQLException &e) {
+          if (con) {
+            con->rollback(); // Rollback transaction on error
+            delete con;
+          }
+          return crow::response(500, std::string("Error adding object: ") +
+                                         e.what());
+        }
+      });
+
+  CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([roots]() {
+    crow::json::wvalue::list json_tree;
+    for (auto &root : roots)
+      json_tree.push_back(nodeToJson(*root));
+    crow::json::wvalue result;
+    result["tree"] = std::move(json_tree);
+    return crow::response(200, result);
+  });
+
+  CROW_ROUTE(app, "/api/helloWord").methods(crow::HTTPMethod::GET)([]() {
+    return crow::response(200, std::string("Hello World!"));
+  });
+
+  app.bindaddr("0.0.0.0").port(18080).run();
+}

@@ -8,8 +8,7 @@
 class ObjectNode {
 public:
   // Constructor with parameters
-  ObjectNode(int id, std::string name,
-             std::vector<std::unique_ptr<ObjectNode>> children);
+  ObjectNode(int id, std::string name, std::vector<ObjectNode *> children);
 
   // Rule of Five is not necessary since we're using smart pointers
   // Default destructor and copy/move semantics
@@ -17,19 +16,19 @@ public:
 
   // Getters
   int getID() const;
-  const std::string &getData() const;
-  const std::vector<std::unique_ptr<ObjectNode>> &getChildren() const;
+  const std::string &getName() const;
+  const std::vector<ObjectNode *> &getChildren() const;
 
   // Setters
   void setID(int id);
   void setName(const std::string &name);
-  void setChildren(std::vector<std::unique_ptr<ObjectNode>> children);
-  void pushChild(std::unique_ptr<ObjectNode> child);
+  void setChildren(std::vector<ObjectNode *> children);
+  void pushChild(ObjectNode *child);
 
 private:
   int id;
   std::string name;
-  std::vector<std::unique_ptr<ObjectNode>> children;
+  std::vector<ObjectNode *> children;
 };
 
 #endif // OBJECTNODE_H

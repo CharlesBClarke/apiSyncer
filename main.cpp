@@ -19,6 +19,7 @@ const std::string DB_NAME = "invmangBase";
 crow::json::wvalue nodeToJson(const ObjectNode &node) {
   crow::json::wvalue jsonNode;
   jsonNode["id"] = node.getID();
+  jsonNode["name"] = node.getName();
   // Recursively add children
   crow::json::wvalue::list children = crow::json::wvalue::list();
   for (const auto &childPtr : node.getChildren()) {
@@ -33,8 +34,9 @@ int main() {
   crow::SimpleApp app;
 
   // build the tree
-  std::vector<std::unique_ptr<ObjectNode>> roots;
   std::unordered_map<int, std::unique_ptr<ObjectNode>> nodes;
+  std::vector<ObjectNode *> roots;
+
   try {
     sql::mysql::MySQL_Driver *driver;
     std::unique_ptr<sql::Connection> con;
@@ -52,15 +54,16 @@ int main() {
     while (res->next()) {
       crow::json::wvalue obj;
       int id = res->getInt("id");
-      obj["serial"] = res->getInt("serial");
-      obj["name"] = res->getString("name");
+      std::string name = res->getString("name");
 
       // Create a unique_ptr to ObjectNode and store it in the map
-      nodes[id] = std::make_unique<ObjectNode>(
-          id, obj.dump(), std::vector<std::unique_ptr<ObjectNode>>{});
+      nodes[id] =
+          std::make_unique<ObjectNode>(id, name, std::vector<ObjectNode *>{});
     }
 
+    // Build tree from relationships
     res.reset(stmt->executeQuery("SELECT * FROM relationships"));
+    std::unordered_map<int, bool> children;
     while (res->next()) {
       int child = res->getInt("child_id");
       int parent = res->getInt("parent_id");
@@ -69,19 +72,19 @@ int main() {
       if (nodes.find(parent) != nodes.end() &&
           nodes.find(child) != nodes.end()) {
         // Move the child to the parent's children vector
-        nodes[parent]->pushChild(std::move(nodes[child]));
+        nodes[parent]->pushChild(nodes[child].get());
+        children[child] = true;
 
-        // Erase the child node from the map after moving it
-        nodes.erase(child);
       } else {
         std::cerr << "Error: Parent or Child node not found!" << std::endl;
       }
     }
-    // now all nodes left in the map are roots
-    for (auto &pair : nodes) {
-      roots.push_back(std::move(pair.second));
+
+    for (const auto &pair : nodes) {
+      if (children.find(pair.first) == children.end()) {
+        roots.push_back(pair.second.get()); // Get raw pointer
+      }
     }
-    nodes.clear();
 
   } catch (sql::SQLException &e) {
     std::cerr << "SQLException occurred:\n"
@@ -90,7 +93,7 @@ int main() {
               << "Message: " << e.what() << std::endl;
   }
 
-  CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([&roots]() {
+  CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([roots]() {
     crow::json::wvalue::list json_tree;
     for (auto &root : roots)
       json_tree.push_back(nodeToJson(*root));
@@ -101,41 +104,6 @@ int main() {
 
   CROW_ROUTE(app, "/api/helloWord").methods(crow::HTTPMethod::GET)([]() {
     return crow::response(200, std::string("Hello World!"));
-  });
-  CROW_ROUTE(app, "/api/relationships").methods(crow::HTTPMethod::GET)([]() {
-    try {
-      sql::mysql::MySQL_Driver *driver;
-      std::unique_ptr<sql::Connection> con;
-
-      driver = sql::mysql::get_mysql_driver_instance();
-      con.reset(
-          driver->connect("tcp://" + DB_HOST + ":3306", DB_USER, DB_PASS));
-      con->setSchema(DB_NAME);
-
-      std::unique_ptr<sql::Statement> stmt(con->createStatement());
-      std::unique_ptr<sql::ResultSet> res(
-          stmt->executeQuery("SELECT parent_id, child_id FROM relationships"));
-
-      crow::json::wvalue result;
-      crow::json::wvalue::list relationships_list;
-
-      // Iterate through the database results and construct the JSON list
-      while (res->next()) {
-        crow::json::wvalue obj;
-        obj["parent_id"] = res->getInt("parent_id");
-        obj["child_id"] = res->getInt("child_id");
-        relationships_list.emplace_back(
-            std::move(obj)); // Add each object to the list
-      }
-
-      result["relationships"] =
-          std::move(relationships_list); // Move the list into the result
-
-      return crow::response(200, result);
-    } catch (sql::SQLException &e) {
-      return crow::response(500, std::string("Error fetching relationships: ") +
-                                     e.what());
-    }
   });
 
   app.bindaddr("0.0.0.0").port(18080).run();
