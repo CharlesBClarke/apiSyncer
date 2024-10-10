@@ -8,13 +8,13 @@
 
 // database shit
 extern MySQLDB db_connector;
+extern std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
+extern std::vector<std::weak_ptr<ObjectNode>> roots;
 
 std::pair<std::vector<std::weak_ptr<ObjectNode>>,
           std::unordered_map<int, std::shared_ptr<ObjectNode>>>
 buildTreeFromDatabase() {
   std::cout << "Building Tree ...\n";
-  std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
-  std::vector<std::weak_ptr<ObjectNode>> roots;
 
   try {
     std::unique_ptr<sql::ResultSet> res(
