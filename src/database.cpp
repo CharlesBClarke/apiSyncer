@@ -1,14 +1,13 @@
 #include "database.h"
+#include "MySQLDB.h"
 #include <iostream>
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
 #include <jdbc/mysql_driver.h>
 #include <unordered_set>
-// Database credentials
-const char *DB_HOST = std::getenv("DB_HOST");
-const char *DB_USER = std::getenv("DB_USER");
-const char *DB_PASS = std::getenv("DB_PASSWORD");
-const char *DB_NAME = std::getenv("DB_NAME");
+
+// database shit
+extern MySQLDB db_connector;
 
 std::pair<std::vector<std::weak_ptr<ObjectNode>>,
           std::unordered_map<int, std::shared_ptr<ObjectNode>>>
@@ -18,17 +17,8 @@ buildTreeFromDatabase() {
   std::vector<std::weak_ptr<ObjectNode>> roots;
 
   try {
-    sql::mysql::MySQL_Driver *driver;
-    std::unique_ptr<sql::Connection> con;
-
-    driver = sql::mysql::get_mysql_driver_instance();
-    con.reset(driver->connect("tcp://" + std::string(DB_HOST) + ":3306",
-                              std::string(DB_USER), std::string(DB_PASS)));
-    con->setSchema(DB_NAME);
-
-    std::unique_ptr<sql::Statement> stmt(con->createStatement());
     std::unique_ptr<sql::ResultSet> res(
-        stmt->executeQuery("SELECT * FROM objects"));
+        db_connector.executeQuery("SELECT * FROM objects"));
 
     // Populate nodes map
     std::cout << "Building nods :";
@@ -43,7 +33,7 @@ buildTreeFromDatabase() {
     std::cout << number << "\n";
 
     // Build tree from relationships
-    res.reset(stmt->executeQuery("SELECT * FROM relationships"));
+    res = db_connector.executeQuery("SELECT * FROM relationships");
     std::unordered_set<int> children;
     std::cout << "setting relationships ...\n";
     while (res->next()) {

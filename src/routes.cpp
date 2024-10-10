@@ -33,10 +33,6 @@ void setupRoutes(crow::SimpleApp &app,
     return crow::response(200, result);
   });
 
-  CROW_ROUTE(app, "/api/rootsCount").methods(crow::HTTPMethod::GET)([&roots]() {
-    int roots_size = roots.size();
-    return crow::response(roots_size, "bad idea");
-  });
   CROW_ROUTE(app, "/api/helloWorld").methods(crow::HTTPMethod::GET)([]() {
     return crow::response(200, "Hello World!");
   });
