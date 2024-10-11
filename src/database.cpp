@@ -1,5 +1,6 @@
 #include "database.h"
 #include "MySQLDB.h"
+#include "ObjectNode.h"
 #include <iostream>
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
@@ -11,9 +12,7 @@ extern MySQLDB db_connector;
 extern std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
 extern std::vector<std::weak_ptr<ObjectNode>> roots;
 
-std::pair<std::vector<std::weak_ptr<ObjectNode>>,
-          std::unordered_map<int, std::shared_ptr<ObjectNode>>>
-buildTreeFromDatabase() {
+void buildTreeFromDatabase() {
   std::cout << "Building Tree ...\n";
 
   try {
@@ -61,6 +60,4 @@ buildTreeFromDatabase() {
               << "SQLState: " << e.getSQLState() << "\n"
               << "Message: " << e.what() << std::endl;
   }
-
-  return {roots, std::move(nodes)};
 }

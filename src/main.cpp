@@ -1,4 +1,5 @@
 #include "MySQLDB.h"
+#include "ObjectNode.h"
 #include "database.h"
 #include "routes.h"
 #include <crow.h>
@@ -19,7 +20,7 @@ int main() {
   crow::SimpleApp app;
   if (db_connector.connect()) {
     // Initialize database and build the tree
-    auto [roots, nodes] = buildTreeFromDatabase();
+    buildTreeFromDatabase();
 
     // Register routes
     setupRoutes(app);

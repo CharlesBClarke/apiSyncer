@@ -1,6 +1,7 @@
 #include "routes.h"
 #include "MySQLDB.h"
 #include "ObjectNode.h"
+#include <string>
 
 extern std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
 extern std::vector<std::weak_ptr<ObjectNode>> roots;
@@ -35,6 +36,7 @@ void setupRoutes(crow::SimpleApp &app) {
    * - Refactor to integrate the map and tree more efficiently.
    * - Consider a database-backed structure for scalability and better hierarchy
    * management.
+   * - Check if auto commit is on or off
    */
   CROW_ROUTE(app, "/api/add_node")
       .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
@@ -47,15 +49,29 @@ void setupRoutes(crow::SimpleApp &app) {
         }
 
         // Get info
-        std::string serial = body["serial"].s();
-        std::string name = body["name"].s();
+        std::string name = "";
+        if (body.has("name") && body["name"].t() != crow::json::type::Null) {
+          std::string name = body["name"].s();
+        } else {
+          return crow::response(500, "Name not privided");
+        }
+        // Declare parent_id, check if it exists and is not null
+        int parent_id = -1;
+        if (body.has("parent_id") &&
+            body["parent_id"].t() != crow::json::type::Null) {
+          parent_id = body["parent_id"].i();
+        }
+
+        // Turn auto-commit off
+        db_connector.executeUpdate("SET AUTOCOMMIT = 0");
 
         // Insert the node into the database
-        std::string query = "INSERT INTO objects (serial, name) VALUES ('" +
-                            serial + "', '" + name + "')";
+        std::string query =
+            "INSERT INTO objects (name) VALUES ('" + name + "')";
         int result = db_connector.executeUpdate(query);
 
         if (result == -1) {
+          db_connector.executeUpdate("ROLLBACK");
           return crow::response(500, "Database error: failed to insert node");
         }
 
@@ -72,14 +88,45 @@ void setupRoutes(crow::SimpleApp &app) {
         nodes[new_id] = std::make_shared<ObjectNode>(
             new_id, name, std::vector<std::weak_ptr<ObjectNode>>{});
 
+        // Now update relationships if needed
+        if (parent_id != -1) {
+          // Insert into relationships table
+          std::string query =
+              "INSERT INTO relationships (child_id, parent_id) VALUES (" +
+              std::to_string(new_id) + ", " + std::to_string(parent_id) + ")";
+          int result = db_connector.executeUpdate(query);
+          if (result == -1) {
+            db_connector.executeUpdate("ROLLBACK");
+            return crow::response(
+                500, "Database error: failed to set relationships");
+          }
+          // Check if parent node exists in nodes map
+          auto parentNodeIt = nodes.find(parent_id);
+          if (parentNodeIt != nodes.end() && parentNodeIt->second) {
+            // Parent node exists, add new node as child
+            parentNodeIt->second->pushChild(
+                std::weak_ptr<ObjectNode>(nodes[new_id]));
+          } else {
+            // Parent node not found, rollback and return error
+            db_connector.executeUpdate("ROLLBACK");
+            return crow::response(400, "Parent node not found " +
+                                           std::to_string(parent_id));
+          }
+        } else {
+          // if no parent, add to roots
+          roots.push_back(std::weak_ptr<ObjectNode>(nodes[new_id]));
+        }
+
+        // Re-enable auto-commit
+        db_connector.executeUpdate("SET AUTOCOMMIT = 1");
+
         // Return success response with node details
         crow::json::wvalue response;
         response["message"] = "Node added successfully";
         response["id"] = new_id;
-        response["serial"] = serial;
         response["name"] = name;
 
-        return crow::response(201, response); // 201: Created
+        return crow::response(201, response);
       });
 
   // Build Tree
