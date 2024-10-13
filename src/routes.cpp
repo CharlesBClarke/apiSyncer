@@ -37,7 +37,34 @@ void setupRoutes(crow::SimpleApp &app) {
    * - Consider a database-backed structure for scalability and better hierarchy
    * management.
    * - Check if auto commit is on or off
+   * - Try Catch shit
    */
+  CROW_ROUTE(app, "/api/remove_node")
+      .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
+        // Parse JSON request body
+        auto body = crow::json::load(req.body);
+
+        // Check if the JSON body is valid
+        if (!body) {
+          return crow::response(400, "Invalid JSON data");
+        }
+
+        // Get Data n shit
+        int id = -1;
+        if (body.has("id") && body["id"].t() != crow::json::type::Null) {
+          id = body["id"].i();
+        } else {
+          return crow::response(400, "You must provide ID");
+        }
+        // action = what do do with children
+        std::string action = "";
+        if (body.has("action") &&
+            body["action"].t() != crow::json::type::Null) {
+          std::string name = body["action"].s();
+        }
+        // Turn auto-commit off
+        db_connector.executeUpdate("SET AUTOCOMMIT = 0");
+      });
   CROW_ROUTE(app, "/api/add_node")
       .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
         // Parse JSON request body
@@ -55,6 +82,7 @@ void setupRoutes(crow::SimpleApp &app) {
         } else {
           return crow::response(500, "Name not privided");
         }
+
         // Declare parent_id, check if it exists and is not null
         int parent_id = -1;
         if (body.has("parent_id") &&
