@@ -23,9 +23,9 @@ link_directories(
 set(SOURCES
     src/main.cpp
     src/routes.cpp
-    src/database.cpp
     include/ObjectNode.cpp
     include/MySQLDB.cpp
+    include/DataSyncMagnr.cpp
 )
 
 # Add executable

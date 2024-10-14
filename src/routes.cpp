@@ -1,11 +1,9 @@
 #include "routes.h"
-#include "MySQLDB.h"
+#include "DataSyncMagnr.h"
 #include "ObjectNode.h"
 #include <string>
 
-extern std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
-extern std::vector<std::weak_ptr<ObjectNode>> roots;
-extern MySQLDB db_connector;
+extern DataSyncMagnr data;
 
 crow::json::wvalue nodeToJson(const ObjectNode &node) {
   crow::json::wvalue jsonNode;
@@ -33,38 +31,8 @@ void setupRoutes(crow::SimpleApp &app) {
    * While functional, this dual approach introduces redundancy and complexity.
    *
    * TODO:
-   * - Refactor to integrate the map and tree more efficiently.
-   * - Consider a database-backed structure for scalability and better hierarchy
-   * management.
-   * - Check if auto commit is on or off
    * - Try Catch shit
    */
-  CROW_ROUTE(app, "/api/remove_node")
-      .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
-        // Parse JSON request body
-        auto body = crow::json::load(req.body);
-
-        // Check if the JSON body is valid
-        if (!body) {
-          return crow::response(400, "Invalid JSON data");
-        }
-
-        // Get Data n shit
-        int id = -1;
-        if (body.has("id") && body["id"].t() != crow::json::type::Null) {
-          id = body["id"].i();
-        } else {
-          return crow::response(400, "You must provide ID");
-        }
-        // action = what do do with children
-        std::string action = "";
-        if (body.has("action") &&
-            body["action"].t() != crow::json::type::Null) {
-          std::string name = body["action"].s();
-        }
-        // Turn auto-commit off
-        db_connector.executeUpdate("SET AUTOCOMMIT = 0");
-      });
   CROW_ROUTE(app, "/api/add_node")
       .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
         // Parse JSON request body
@@ -78,9 +46,9 @@ void setupRoutes(crow::SimpleApp &app) {
         // Get info
         std::string name = "";
         if (body.has("name") && body["name"].t() != crow::json::type::Null) {
-          std::string name = body["name"].s();
+          name = body["name"].s();
         } else {
-          return crow::response(500, "Name not privided");
+          return crow::response(500, "Name not provided");
         }
 
         // Declare parent_id, check if it exists and is not null
@@ -90,63 +58,7 @@ void setupRoutes(crow::SimpleApp &app) {
           parent_id = body["parent_id"].i();
         }
 
-        // Turn auto-commit off
-        db_connector.executeUpdate("SET AUTOCOMMIT = 0");
-
-        // Insert the node into the database
-        std::string query =
-            "INSERT INTO objects (name) VALUES ('" + name + "')";
-        int result = db_connector.executeUpdate(query);
-
-        if (result == -1) {
-          db_connector.executeUpdate("ROLLBACK");
-          return crow::response(500, "Database error: failed to insert node");
-        }
-
-        // Retrieve the auto-incremented ID
-        std::unique_ptr<sql::ResultSet> res =
-            db_connector.executeQuery("SELECT LAST_INSERT_ID() AS id");
-        if (!res || !res->next()) {
-          return crow::response(
-              500, "Database error: failed to retrieve new node ID");
-        }
-        int new_id = res->getInt("id");
-
-        // I am going to clean this shit up in the futre
-        nodes[new_id] = std::make_shared<ObjectNode>(
-            new_id, name, std::vector<std::weak_ptr<ObjectNode>>{});
-
-        // Now update relationships if needed
-        if (parent_id != -1) {
-          // Insert into relationships table
-          std::string query =
-              "INSERT INTO relationships (child_id, parent_id) VALUES (" +
-              std::to_string(new_id) + ", " + std::to_string(parent_id) + ")";
-          int result = db_connector.executeUpdate(query);
-          if (result == -1) {
-            db_connector.executeUpdate("ROLLBACK");
-            return crow::response(
-                500, "Database error: failed to set relationships");
-          }
-          // Check if parent node exists in nodes map
-          auto parentNodeIt = nodes.find(parent_id);
-          if (parentNodeIt != nodes.end() && parentNodeIt->second) {
-            // Parent node exists, add new node as child
-            parentNodeIt->second->pushChild(
-                std::weak_ptr<ObjectNode>(nodes[new_id]));
-          } else {
-            // Parent node not found, rollback and return error
-            db_connector.executeUpdate("ROLLBACK");
-            return crow::response(400, "Parent node not found " +
-                                           std::to_string(parent_id));
-          }
-        } else {
-          // if no parent, add to roots
-          roots.push_back(std::weak_ptr<ObjectNode>(nodes[new_id]));
-        }
-
-        // Re-enable auto-commit
-        db_connector.executeUpdate("SET AUTOCOMMIT = 1");
+        int new_id = data.addNode(name, parent_id);
 
         // Return success response with node details
         crow::json::wvalue response;
@@ -160,7 +72,7 @@ void setupRoutes(crow::SimpleApp &app) {
   // Build Tree
   CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([]() {
     crow::json::wvalue::list json_tree;
-
+    const auto &roots = data.getRoots();
     for (const auto &root : roots) {
       if (auto lock = root.lock()) { // Lock weak_ptr and check if it's valid
         json_tree.push_back(nodeToJson(

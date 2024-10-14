@@ -3,7 +3,9 @@
 
 DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
                              const std::string &pass, const std::string &dbname)
-    : db_connector(host, user, pass, dbname) {
+    : db_connector(host, user, pass, dbname),
+      connection(db_connector.connect()) {
+
   std::cout << "Building Tree ...\n";
   // sync other Data with database
   try {
@@ -53,12 +55,18 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
   }
 }
 
+// maybe I should have an isConnectted but this is all for now;
+bool DataSyncMagnr::hasConnected() { return connection; }
+
+const std::vector<std::weak_ptr<ObjectNode>> &DataSyncMagnr::getRoots() const {
+  return roots;
+}
 /*
  * TODO:
  * - Try Catch shit
  * - Check if AUTOCOMMIT is on
  */
-bool DataSyncMagnr::addNode(const std::string &name, int parent_id) {
+int DataSyncMagnr::addNode(const std::string &name, int parent_id) {
 
   // make sure AUTOCOMMIT is off
   db_connector.executeUpdate("SET AUTOCOMMIT = 0");

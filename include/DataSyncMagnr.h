@@ -12,13 +12,16 @@ private:
   std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
   std::vector<std::weak_ptr<ObjectNode>> roots;
   MySQLDB db_connector;
+  bool connection;
 
 public:
   DataSyncMagnr(const std::string &host, const std::string &user,
                 const std::string &pass, const std::string &dbname);
-  ~DataSyncMagnr();
-  //
-  bool addNode(const std::string &name, int parent_id = -1);
+  // Accessors
+  bool hasConnected();
+  // Add this accessor
+  const std::vector<std::weak_ptr<ObjectNode>> &getRoots() const;
+  int addNode(const std::string &name, int parent_id = -1);
 };
 
 #endif // DATASYNCMAGNR_H

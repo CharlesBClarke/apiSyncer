@@ -1,6 +1,4 @@
-#include "MySQLDB.h"
-#include "ObjectNode.h"
-#include "database.h"
+#include "DataSyncMagnr.h"
 #include "routes.h"
 #include <crow.h>
 #include <iostream>
@@ -11,17 +9,11 @@ const char *DB_USER = std::getenv("DB_USER");
 const char *DB_PASS = std::getenv("DB_PASSWORD");
 const char *DB_NAME = std::getenv("DB_NAME");
 
-// Data Structs
-std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
-std::vector<std::weak_ptr<ObjectNode>> roots;
-MySQLDB db_connector{std::string(DB_HOST), std::string(DB_USER),
-                     std::string(DB_PASS), std::string(DB_NAME)};
+DataSyncMagnr data{std::string(DB_HOST), std::string(DB_USER),
+                   std::string(DB_PASS), std::string(DB_NAME)};
 int main() {
   crow::SimpleApp app;
-  if (db_connector.connect()) {
-    // Initialize database and build the tree
-    buildTreeFromDatabase();
-
+  if (data.hasConnected()) {
     // Register routes
     setupRoutes(app);
 
