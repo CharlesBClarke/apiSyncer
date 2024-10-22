@@ -13,16 +13,12 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
         db_connector.executeQuery("SELECT * FROM objects"));
 
     // Populate nodes map
-    std::cout << "Building nods :";
-    int number = 0;
     while (res->next()) {
-      ++number;
       int id = res->getInt("id");
       std::string name = res->getString("name");
       nodes[id] = std::make_shared<ObjectNode>(
           id, name, std::vector<std::weak_ptr<ObjectNode>>{});
     }
-    std::cout << number << "\n";
 
     // Build tree from relationships
     res = db_connector.executeQuery("SELECT * FROM relationships");
@@ -121,4 +117,75 @@ int DataSyncMagnr::addNode(const std::string &name, int parent_id) {
   db_connector.executeUpdate("SET AUTOCOMMIT = 1");
 
   return new_id;
+}
+
+void DataSyncMagnr::removeNode(int id) {
+  auto it = nodes.find(id);
+  std::shared_ptr<ObjectNode> object;
+  if (it != nodes.end()) {
+    object = {it->second};
+  } else {
+    std::cerr << "Node Not found";
+    return;
+  }
+  if (object->getChildren().size() != 0) {
+    std::cerr << "he has kids, I can't!";
+    return;
+  }
+
+  // make sure AUTOCOMMIT is off
+  db_connector.executeUpdate("SET AUTOCOMMIT = 0");
+
+  // delete from objects
+  std::string query = "DELETE FROM objects WHERE id = " + std::to_string(id);
+  int result = db_connector.executeUpdate(query);
+  if (result == -1) {
+    db_connector.executeUpdate("ROLLBACK");
+    std::cerr << "DataBase Failure: delete from objects failed";
+    return;
+  }
+  // Step 1: Construct the query to find the parent_id
+  query = "SELECT parent_id FROM relationships WHERE child_id = " +
+          std::to_string(id);
+
+  // Step 2: Execute the query to get the parent_id
+  std::unique_ptr<sql::ResultSet> res(db_connector.executeQuery(query));
+
+  // Step 3: Check if a result exists
+  if (res->next()) {
+    // Step 4: Retrieve the parent_id from the result set
+    int parent_id = res->getInt("parent_id");
+
+    // Step 5: Use the parent_id to query the objects table and get the parent
+    // object
+    std::string parent_query =
+        "SELECT * FROM objects WHERE id = " + std::to_string(parent_id);
+    std::unique_ptr<sql::ResultSet> parent_res(
+        db_connector.executeQuery(parent_query));
+
+    if (parent_res->next()) {
+      // Step 6: Retrieve parent object details (e.g., name) from parent_res
+      std::string parent_name = parent_res->getString("name");
+
+      // Step 7: Here you could create a pointer to the parent object if needed
+      // For example:
+      Object *parent_object = new Object(parent_id, parent_name);
+      // Use parent_object as needed, and don't forget to manage memory!
+
+      std::cout << "Parent Name: " << parent_name << std::endl;
+    } else {
+      std::cerr << "Parent object not found!" << std::endl;
+    }
+  } else {
+    std::cerr << "No parent found for child with id = " << id << std::endl;
+  }
+
+  // delete from objects
+  query = "DELETE FROM relationships WHERE parent_id = " + std::to_string(id);
+  result = db_connector.executeUpdate(query);
+  if (result == -1) {
+    db_connector.executeUpdate("ROLLBACK");
+    std::cerr << "DataBase Failure: delete from relationships failed";
+    return;
+  }
 }

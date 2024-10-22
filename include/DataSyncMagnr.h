@@ -22,6 +22,7 @@ public:
   // Add this accessor
   const std::vector<std::weak_ptr<ObjectNode>> &getRoots() const;
   int addNode(const std::string &name, int parent_id = -1);
+  void removeNode(int id);
 };
 
 #endif // DATASYNCMAGNR_H

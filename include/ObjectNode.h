@@ -1,5 +1,4 @@
-#ifndef OBJECTNODE_H
-#define OBJECTNODE_H
+#pragma once
 
 #include <memory>
 #include <string>
@@ -29,5 +28,3 @@ private:
   std::string name;
   std::vector<std::weak_ptr<ObjectNode>> children;
 };
-
-#endif // OBJECTNODE_H

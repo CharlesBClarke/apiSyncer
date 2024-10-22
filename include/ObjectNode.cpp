@@ -14,6 +14,10 @@ const std::vector<std::weak_ptr<ObjectNode>> &ObjectNode::getChildren() const {
   return children;
 }
 
+const std::weak_ptr<ObjectNode> &ObjectNode::getParent() const {
+  return parent;
+}
+
 // Setters
 void ObjectNode::setID(int id) { this->id = id; }
 
@@ -25,4 +29,7 @@ void ObjectNode::setChildren(std::vector<std::weak_ptr<ObjectNode>> children) {
 
 void ObjectNode::pushChild(std::weak_ptr<ObjectNode> child) {
   children.push_back(std::move(child));
+}
+void ObjectNode::setParent(std::weak_ptr<ObjectNode> parent) {
+  this->parent = parent;
 }
