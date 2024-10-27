@@ -7,7 +7,9 @@ RUN apt-get update && \
     build-essential \
     cmake \
     libmysqlcppconn-dev \
+    libboost-all-dev \
     libssl-dev \
+    libasio-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
@@ -17,11 +19,13 @@ WORKDIR /usr/src/app
 COPY . .
 
 # Build the project
-RUN cmake -B build . && \
-    cmake --build build
+RUN mkdir build && \
+    cd build && \
+    cmake .. && \
+    make
 
 # Expose the port your app runs on
-EXPOSE 8080
+EXPOSE 18080
 
 # Set the command to run the application
 CMD ["./build/invmanr_api"]

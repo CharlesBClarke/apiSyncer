@@ -22,6 +22,7 @@ public:
   void setName(const std::string &name);
   void setChildren(std::vector<std::weak_ptr<ObjectNode>> children);
   void pushChild(std::weak_ptr<ObjectNode> child);
+  void removeChild(std::weak_ptr<ObjectNode> target);
 
 private:
   int id;

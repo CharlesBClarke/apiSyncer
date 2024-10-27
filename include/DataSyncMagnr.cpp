@@ -1,4 +1,5 @@
 #include "DataSyncMagnr.h"
+#include <algorithm>
 #include <unordered_set>
 
 DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
@@ -129,7 +130,7 @@ void DataSyncMagnr::removeNode(int id) {
     return;
   }
   if (object->getChildren().size() != 0) {
-    std::cerr << "he has kids, I can't!";
+    std::cerr << "Cannot remove node: it has child nodes.\n";
     return;
   }
 
@@ -155,37 +156,44 @@ void DataSyncMagnr::removeNode(int id) {
   if (res->next()) {
     // Step 4: Retrieve the parent_id from the result set
     int parent_id = res->getInt("parent_id");
-
-    // Step 5: Use the parent_id to query the objects table and get the parent
-    // object
-    std::string parent_query =
-        "SELECT * FROM objects WHERE id = " + std::to_string(parent_id);
-    std::unique_ptr<sql::ResultSet> parent_res(
-        db_connector.executeQuery(parent_query));
-
-    if (parent_res->next()) {
-      // Step 6: Retrieve parent object details (e.g., name) from parent_res
-      std::string parent_name = parent_res->getString("name");
-
-      // Step 7: Here you could create a pointer to the parent object if needed
-      // For example:
-      Object *parent_object = new Object(parent_id, parent_name);
-      // Use parent_object as needed, and don't forget to manage memory!
-
-      std::cout << "Parent Name: " << parent_name << std::endl;
+    auto parent_it = nodes.find(parent_id);
+    std::shared_ptr<ObjectNode> parent_object;
+    if (parent_it != nodes.end()) {
+      parent_object = parent_it->second;
     } else {
-      std::cerr << "Parent object not found!" << std::endl;
+      std::cerr << "Parent Node Not found\n";
+      db_connector.executeUpdate("ROLLBACK");
+      db_connector.executeUpdate("SET AUTOCOMMIT = 1");
+      return;
+    }
+    parent_object->removeChild(object);
+
+    // delete from relationships
+    query = "DELETE FROM relationships WHERE parent_id = " +
+            std::to_string(parent_id);
+    result = db_connector.executeUpdate(query);
+    if (result == -1) {
+      db_connector.executeUpdate("ROLLBACK");
+      std::cerr << "DataBase Failure: delete from relationships failed";
+      return;
     }
   } else {
-    std::cerr << "No parent found for child with id = " << id << std::endl;
+    roots.erase(
+        std::remove_if(
+            roots.begin(), roots.end(),
+            [&object](const std::weak_ptr<ObjectNode> &weak_ptr) {
+              if (auto sp_wp = weak_ptr.lock()) {
+                return sp_wp == object; // Remove if pointing to the same object
+              }
+              return false; // Do not remove if weak_ptr could not be locked
+            }),
+        roots.end());
   }
 
-  // delete from objects
-  query = "DELETE FROM relationships WHERE parent_id = " + std::to_string(id);
-  result = db_connector.executeUpdate(query);
-  if (result == -1) {
-    db_connector.executeUpdate("ROLLBACK");
-    std::cerr << "DataBase Failure: delete from relationships failed";
-    return;
-  }
+  // FInally remove form
+  nodes.erase(id);
+
+  // Commit the transaction
+  db_connector.executeUpdate("COMMIT");
+  db_connector.executeUpdate("SET AUTOCOMMIT = 1");
 }
