@@ -1,12 +1,16 @@
 #include "DataSyncMagnr.h"
-#include <algorithm>
+#include <limits>
+#include <memory>
 #include <unordered_set>
 
 DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
                              const std::string &pass, const std::string &dbname)
     : db_connector(host, user, pass, dbname),
       connection(db_connector.connect()) {
-
+  this->nodes[std::numeric_limits<unsigned int>::max()] =
+      std::make_shared<ObjectNode>(ObjectNode(
+          std::numeric_limits<unsigned int>::max(), "superRoot", {}));
+  this->superRoot = nodes.find(std::numeric_limits<uint>::max())->second;
   std::cout << "Building Tree ...\n";
   // sync other Data with database
   try {
@@ -37,13 +41,14 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
         std::cerr << "Error: Parent or Child node not found!" << std::endl;
       }
     }
-
+    std::cout << "relationships built" << std::endl;
     // Identify root nodes
     for (const auto &pair : nodes) {
       if (children.find(pair.first) == children.end()) {
-        roots.push_back(std::weak_ptr<ObjectNode>(pair.second));
+        superRoot.lock()->pushChild(std::weak_ptr<ObjectNode>(pair.second));
       }
     }
+    std::cout << "root nodes found" << std::endl;
   } catch (sql::SQLException &e) {
     std::cerr << "SQLException occurred:\n"
               << "Error Code: " << e.getErrorCode() << "\n"
@@ -55,9 +60,7 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
 // maybe I should have an isConnectted but this is all for now;
 bool DataSyncMagnr::hasConnected() { return connection; }
 
-const std::vector<std::weak_ptr<ObjectNode>> &DataSyncMagnr::getRoots() const {
-  return roots;
-}
+std::weak_ptr<ObjectNode> DataSyncMagnr::getSuperRoot() { return superRoot; }
 /*
  * TODO:
  * - Try Catch shit
@@ -111,7 +114,7 @@ int DataSyncMagnr::addNode(const std::string &name, int parent_id) {
     }
   } else {
     // if no parent, add to roots
-    roots.push_back(std::weak_ptr<ObjectNode>(nodes[new_id]));
+    superRoot.lock()->pushChild(std::weak_ptr<ObjectNode>(nodes[new_id]));
   }
 
   // Re-enable auto-commit
@@ -137,23 +140,21 @@ void DataSyncMagnr::removeNode(int id) {
   // make sure AUTOCOMMIT is off
   db_connector.executeUpdate("SET AUTOCOMMIT = 0");
 
-  // delete from objects
-  std::string query = "DELETE FROM objects WHERE id = " + std::to_string(id);
-  int result = db_connector.executeUpdate(query);
-  if (result == -1) {
-    db_connector.executeUpdate("ROLLBACK");
-    std::cerr << "DataBase Failure: delete from objects failed";
-    return;
-  }
   // Step 1: Construct the query to find the parent_id
-  query = "SELECT parent_id FROM relationships WHERE child_id = " +
-          std::to_string(id);
+  std::string query = "SELECT parent_id FROM relationships WHERE child_id = " +
+                      std::to_string(id);
 
   // Step 2: Execute the query to get the parent_id
   std::unique_ptr<sql::ResultSet> res(db_connector.executeQuery(query));
 
-  // Step 3: Check if a result exists
+  if (!res) {
+    std::cerr << "Failed to execute query: " << query << std::endl;
+    return;
+  }
+
+  // Step 3: Check if parent exist
   if (res->next()) {
+    std::cout << "parent exist\n";
     // Step 4: Retrieve the parent_id from the result set
     int parent_id = res->getInt("parent_id");
     auto parent_it = nodes.find(parent_id);
@@ -166,34 +167,55 @@ void DataSyncMagnr::removeNode(int id) {
       db_connector.executeUpdate("SET AUTOCOMMIT = 1");
       return;
     }
+    std::cout << "Deleting child from parent node\n";
     parent_object->removeChild(object);
 
     // delete from relationships
     query = "DELETE FROM relationships WHERE parent_id = " +
             std::to_string(parent_id);
-    result = db_connector.executeUpdate(query);
+    int result = db_connector.executeUpdate(query);
     if (result == -1) {
       db_connector.executeUpdate("ROLLBACK");
       std::cerr << "DataBase Failure: delete from relationships failed";
       return;
     }
   } else {
-    roots.erase(
-        std::remove_if(
-            roots.begin(), roots.end(),
-            [&object](const std::weak_ptr<ObjectNode> &weak_ptr) {
-              if (auto sp_wp = weak_ptr.lock()) {
-                return sp_wp == object; // Remove if pointing to the same object
-              }
-              return false; // Do not remove if weak_ptr could not be locked
-            }),
-        roots.end());
+    std::cout << "Parent not found for id = " << id << "\n";
+    return;
   }
 
+  // delete from objects
+  query = "DELETE FROM objects WHERE id = " + std::to_string(id);
+  int result = db_connector.executeUpdate(query);
+  if (result == -1) {
+    db_connector.executeUpdate("ROLLBACK");
+    std::cerr << "DataBase Failure: delete from objects failed";
+    return;
+  }
   // FInally remove form
   nodes.erase(id);
 
   // Commit the transaction
   db_connector.executeUpdate("COMMIT");
   db_connector.executeUpdate("SET AUTOCOMMIT = 1");
+}
+
+// Shitty implinattion just check for expired nodes
+bool DataSyncMagnr::validate_tree() {
+
+  for (const auto &[key, node] : nodes) { // Iterates over each key-value pair
+    if (!node) {
+      std::cerr << "Nodes has bad pointers";
+      return false;
+    } else {
+      for (const auto &child : node->getChildren()) {
+        if (child.expired()) {
+          std::cerr << "Nodes has bad pointers";
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
 }

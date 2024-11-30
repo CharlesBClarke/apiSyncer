@@ -10,7 +10,7 @@ class DataSyncMagnr {
 private:
   // Data Structs
   std::unordered_map<int, std::shared_ptr<ObjectNode>> nodes;
-  std::vector<std::weak_ptr<ObjectNode>> roots;
+  std::weak_ptr<ObjectNode> superRoot;
   MySQLDB db_connector;
   bool connection;
 
@@ -19,10 +19,12 @@ public:
                 const std::string &pass, const std::string &dbname);
   // Accessors
   bool hasConnected();
+
   // Add this accessor
-  const std::vector<std::weak_ptr<ObjectNode>> &getRoots() const;
+  std::weak_ptr<ObjectNode> getSuperRoot();
   int addNode(const std::string &name, int parent_id = -1);
   void removeNode(int id);
+  bool validate_tree();
 };
 
 #endif // DATASYNCMAGNR_H

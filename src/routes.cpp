@@ -33,6 +33,8 @@ void setupRoutes(crow::SimpleApp &app) {
    * TODO:
    * - Try Catch shit
    */
+  std::cout << "buildind";
+
   CROW_ROUTE(app, "/api/add_node")
       .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
         // Parse JSON request body
@@ -69,23 +71,65 @@ void setupRoutes(crow::SimpleApp &app) {
         return crow::response(201, response);
       });
 
+  CROW_ROUTE(app, "/api/remove_node")
+      .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
+        // Parse JSON request body
+        auto body = crow::json::load(req.body);
+
+        // Check if the JSON body is valid
+        if (!body) {
+          return crow::response(400, "Invalid JSON data");
+        }
+
+        // Get info
+        int id = std::intmax_t();
+        if (body.has("id") && body["id"].t() != crow::json::type::Null) {
+          id = body["id"].i();
+        } else {
+          return crow::response(500, "Name not provided");
+        }
+
+        data.removeNode(id);
+
+        // Return success response with node details
+        crow::json::wvalue response;
+        response["message"] = "Node Remvoed successfully";
+        response["id"] = id;
+
+        return crow::response(201, response);
+      });
+
   // Build Tree
   CROW_ROUTE(app, "/api/tree").methods(crow::HTTPMethod::GET)([]() {
     crow::json::wvalue::list json_tree;
-    const auto &roots = data.getRoots();
-    for (const auto &root : roots) {
-      if (auto lock = root.lock()) { // Lock weak_ptr and check if it's valid
-        json_tree.push_back(nodeToJson(
-            *lock)); // Assuming nodeToJson converts ObjectNode to JSON
+
+    // Lock weak_ptr and check if it's valid
+    if (auto lock = data.getSuperRoot().lock()) {
+      try {
+        json_tree.push_back(nodeToJson(*lock)); // Convert ObjectNode to JSON
+      } catch (const std::exception &e) {
+        // Handle conversion failure
+        return crow::response(500, "Failed to convert node to JSON");
       }
+    } else {
+      // Handle weak_ptr lock failure
+      return crow::response(404, "SuperRoot not found");
     }
 
+    // Build final JSON response
     crow::json::wvalue result;
-    result["tree"] = std::move(json_tree);
+    result["tree"] = crow::json::wvalue(json_tree);
     return crow::response(200, result);
   });
 
   CROW_ROUTE(app, "/api/helloWorld").methods(crow::HTTPMethod::GET)([]() {
     return crow::response(200, "Hello World!");
+  });
+  CROW_ROUTE(app, "/api/dev/verify").methods(crow::HTTPMethod::GET)([]() {
+    if (data.validate_tree()) {
+      return crow::response(200, "tree good");
+    } else {
+      return crow::response(200, "tree bad");
+    }
   });
 }
