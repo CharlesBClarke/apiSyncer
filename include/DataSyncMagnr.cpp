@@ -44,12 +44,16 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
       }
     }
     std::cout << "relationships built" << std::endl;
+
     // Identify root nodes
+    unsigned int superRootID = std::numeric_limits<unsigned int>::max();
     for (const auto &pair : nodes) {
-      if (children.find(pair.first) == children.end()) {
+      if (children.find(pair.first) == children.end() &&
+          pair.first != superRootID) {
         superRoot.lock()->pushChild(std::weak_ptr<ObjectNode>(pair.second));
       }
     }
+
     std::cout << "root nodes found" << std::endl;
   } catch (sql::SQLException &e) {
     std::cerr << "SQLException occurred:\n"
