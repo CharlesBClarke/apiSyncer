@@ -17,7 +17,7 @@ crow::json::wvalue nodeToJson(const ObjectNode &node) {
     if (auto lock = childPtr.lock()) {
       children.push_back(nodeToJson(*lock));
     } else {
-      std::cerr << "Expired child in tree";
+      std::cerr << "Expired child in tree\n";
     }
   }
   jsonNode["children"] = std::move(children);
