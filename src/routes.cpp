@@ -7,6 +7,8 @@
 extern DataSyncMagnr data;
 
 crow::json::wvalue nodeToJson(const ObjectNode &node) {
+  json_tree.push_back(nodeToJson(*lock)); // Convert ObjectNode to JSON
+  std::cout << "Debug: api tree almost done" << std::endl;
   crow::json::wvalue jsonNode;
   jsonNode["id"] = node.getID();
   jsonNode["name"] = node.getName();
