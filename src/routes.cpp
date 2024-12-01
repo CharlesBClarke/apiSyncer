@@ -124,7 +124,7 @@ void setupRoutes(crow::SimpleApp &app) {
 
     // Build final JSON response
     crow::json::wvalue result;
-    result["tree"] = crow::json::wvalue(json_tree);
+    result["tree"] = std::move(json_tree);
     return crow::response(200, result);
   });
 
