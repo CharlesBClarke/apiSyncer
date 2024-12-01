@@ -15,6 +15,7 @@ private:
   bool connection;
 
 public:
+  static const unsigned int SUPER_ROOT_ID;
   DataSyncMagnr(const std::string &host, const std::string &user,
                 const std::string &pass, const std::string &dbname);
   // Accessors
