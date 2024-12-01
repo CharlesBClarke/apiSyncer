@@ -112,7 +112,7 @@ void setupRoutes(crow::SimpleApp &app) {
     if (auto lock = data.getSuperRoot().lock()) {
       try {
         json_tree.push_back(nodeToJson(*lock)); // Convert ObjectNode to JSON
-        std::cout << "Debug: almost done\n";
+        std::cout << "Debug: api tree almost done" << std::endl;
       } catch (const std::exception &e) {
         // Handle conversion failure
         return crow::response(500, "Failed to convert node to JSON");
