@@ -7,6 +7,7 @@
 extern DataSyncMagnr data;
 
 crow::json::wvalue nodeToJson(const ObjectNode &node) {
+  std::cout << "Node To Json\n";
   crow::json::wvalue jsonNode;
   jsonNode["id"] = node.getID();
   jsonNode["name"] = node.getName();
