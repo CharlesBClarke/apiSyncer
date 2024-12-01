@@ -1,6 +1,7 @@
 #include "routes.h"
 #include "DataSyncMagnr.h"
 #include "ObjectNode.h"
+#include <iostream>
 #include <string>
 
 extern DataSyncMagnr data;
@@ -37,6 +38,7 @@ void setupRoutes(crow::SimpleApp &app) {
 
   CROW_ROUTE(app, "/api/add_node")
       .methods(crow::HTTPMethod::POST)([](const crow::request &req) {
+        std::cout << "Starting Node to json \n";
         // Parse JSON request body
         auto body = crow::json::load(req.body);
 
