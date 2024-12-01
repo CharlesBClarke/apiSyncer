@@ -3,6 +3,9 @@
 #include <memory>
 #include <unordered_set>
 
+const unsigned int DataSyncMagnr::SUPER_ROOT_ID =
+    std::numeric_limits<unsigned int>::max();
+
 DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
                              const std::string &pass, const std::string &dbname)
     : db_connector(host, user, pass, dbname),
