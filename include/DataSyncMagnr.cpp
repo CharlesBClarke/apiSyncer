@@ -10,9 +10,8 @@ DataSyncMagnr::DataSyncMagnr(const std::string &host, const std::string &user,
                              const std::string &pass, const std::string &dbname)
     : db_connector(host, user, pass, dbname),
       connection(db_connector.connect()) {
-  this->nodes[std::numeric_limits<unsigned int>::max()] =
-      std::make_shared<ObjectNode>(ObjectNode(
-          std::numeric_limits<unsigned int>::max(), "superRoot", {}));
+  this->nodes[SUPER_ROOT_ID] =
+      std::make_shared<ObjectNode>(ObjectNode(SUPER_ROOT_ID, "superRoot", {}));
   this->superRoot = nodes.find(std::numeric_limits<uint>::max())->second;
   std::cout << "Building Tree ...\n";
   // sync other Data with database
