@@ -7,7 +7,6 @@
 extern DataSyncMagnr data;
 
 crow::json::wvalue nodeToJson(const ObjectNode &node) {
-  std::cout << "Node To Json\n";
   crow::json::wvalue jsonNode;
   jsonNode["id"] = node.getID();
   jsonNode["name"] = node.getName();
@@ -121,6 +120,7 @@ void setupRoutes(crow::SimpleApp &app) {
       // Handle weak_ptr lock failure
       return crow::response(404, "SuperRoot not found");
     }
+    std::cout << "almost done";
 
     // Build final JSON response
     crow::json::wvalue result;
