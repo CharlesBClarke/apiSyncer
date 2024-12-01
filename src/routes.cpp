@@ -120,7 +120,7 @@ void setupRoutes(crow::SimpleApp &app) {
       // Handle weak_ptr lock failure
       return crow::response(404, "SuperRoot not found");
     }
-    std::cout << "almost done";
+    std::cout << "Debug: almost done\n";
 
     // Build final JSON response
     crow::json::wvalue result;
