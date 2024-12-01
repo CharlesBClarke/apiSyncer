@@ -112,6 +112,7 @@ void setupRoutes(crow::SimpleApp &app) {
     if (auto lock = data.getSuperRoot().lock()) {
       try {
         json_tree.push_back(nodeToJson(*lock)); // Convert ObjectNode to JSON
+        std::cout << "Debug: almost done\n";
       } catch (const std::exception &e) {
         // Handle conversion failure
         return crow::response(500, "Failed to convert node to JSON");
@@ -120,7 +121,6 @@ void setupRoutes(crow::SimpleApp &app) {
       // Handle weak_ptr lock failure
       return crow::response(404, "SuperRoot not found");
     }
-    std::cout << "Debug: almost done\n";
 
     // Build final JSON response
     crow::json::wvalue result;
