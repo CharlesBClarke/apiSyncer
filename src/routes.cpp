@@ -14,8 +14,11 @@ crow::json::wvalue nodeToJson(const ObjectNode &node) {
   // Recursively add children
   crow::json::wvalue::list children;
   for (const auto &childPtr : node.getChildren()) {
-    std::shared_ptr lock{childPtr.lock()};
-    children.push_back(nodeToJson(*lock));
+    if (auto lock = childPtr.lock()) {
+      children.push_back(nodeToJson(*lock));
+    } else {
+      std::cerr << "Expired child in tree";
+    }
   }
   jsonNode["children"] = std::move(children);
   return jsonNode;
