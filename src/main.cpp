@@ -1,6 +1,6 @@
 #include "DataSyncMagnr.h"
-#include "routes.h"
 #include <crow.h>
+#include "routes.h"
 #include <iostream>
 
 // Database credentials
